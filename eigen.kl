@@ -920,6 +920,322 @@ fn matrix_diag(v: Matrix) Matrix {
     return d
 }
 
+class SparseMatrix {
+    rows: int
+    cols: int
+    def: f64
+    nnz: int
+    cap: int
+    values: f64*
+    rindices: int*
+    cindices: int*
+    fn nnz_count() int {
+        return self.nnz
+    }
+    fn grow() {
+        int newcap = 16
+        if (self.cap > 0) {
+            newcap = self.cap * 2
+        }
+        self.values = std.memory.kmm_v4_realloc(self.values, newcap * 8)
+        self.rindices = std.memory.kmm_v4_realloc(self.rindices, newcap * 4)
+        self.cindices = std.memory.kmm_v4_realloc(self.cindices, newcap * 4)
+        self.cap = newcap
+    }
+    fn find(int i, int j) int {
+        int k = 0
+        while (k < self.nnz) {
+            if (self.rindices[k] == i) {
+                if (self.cindices[k] == j) {
+                    return k
+                }
+            }
+            k = k + 1
+        }
+        return -1
+    }
+    fn set(int i, int j, f64 v) {
+        if (i < 0) {
+            return
+        }
+        if (i >= self.rows) {
+            return
+        }
+        if (j < 0) {
+            return
+        }
+        if (j >= self.cols) {
+            return
+        }
+        int k = self.find(i, j)
+        if (k >= 0) {
+            f64 diff = v - self.def
+            if (diff == 0.0) {
+                while (k < self.nnz - 1) {
+                    self.values[k] = self.values[k + 1]
+                    self.rindices[k] = self.rindices[k + 1]
+                    self.cindices[k] = self.cindices[k + 1]
+                    k = k + 1
+                }
+                self.nnz = self.nnz - 1
+            } else {
+                self.values[k] = v
+            }
+            return
+        }
+        f64 d2 = v - self.def
+        if (d2 == 0.0) {
+            return
+        }
+        if (self.nnz >= self.cap) {
+            self.grow()
+        }
+        int pos = self.nnz
+        while (pos > 0) {
+            int pr = self.rindices[pos - 1]
+            int pc = self.cindices[pos - 1]
+            if (pr < i) {
+                break
+            }
+            if (pr == i) {
+                if (pc < j) {
+                    break
+                }
+            }
+            self.values[pos] = self.values[pos - 1]
+            self.rindices[pos] = self.rindices[pos - 1]
+            self.cindices[pos] = self.cindices[pos - 1]
+            pos = pos - 1
+        }
+        self.values[pos] = v
+        self.rindices[pos] = i
+        self.cindices[pos] = j
+        self.nnz = self.nnz + 1
+    }
+    fn get(int i, int j) f64 {
+        int k = self.find(i, j)
+        if (k >= 0) {
+            return self.values[k]
+        }
+        return self.def
+    }
+    fn to_dense() Matrix {
+        Matrix m = Matrix(self.rows, self.cols)
+        int n = self.rows * self.cols
+        int i = 0
+        while (i < n) {
+            m.data[i] = self.def
+            i = i + 1
+        }
+        int a = 0
+        while (a < self.nnz) {
+            m.set(self.rindices[a], self.cindices[a], self.values[a])
+            a = a + 1
+        }
+        return m
+    }
+    fn add(SparseMatrix other) SparseMatrix {
+        SparseMatrix r = SparseMatrix(self.rows, self.cols, self.def + other.def)
+        int a = 0
+        while (a < self.nnz) {
+            f64 v = self.values[a] + other.get(self.rindices[a], self.cindices[a])
+            r.set(self.rindices[a], self.cindices[a], v)
+            a = a + 1
+        }
+        int b = 0
+        while (b < other.nnz) {
+            f64 v = other.values[b] + self.get(other.rindices[b], other.cindices[b])
+            r.set(other.rindices[b], other.cindices[b], v)
+            b = b + 1
+        }
+        return r
+    }
+    fn scalar_mul(f64 v) SparseMatrix {
+        SparseMatrix r = SparseMatrix(self.rows, self.cols, self.def * v)
+        int a = 0
+        while (a < self.nnz) {
+            r.set(self.rindices[a], self.cindices[a], self.values[a] * v)
+            a = a + 1
+        }
+        return r
+    }
+    fn transpose() SparseMatrix {
+        SparseMatrix t = SparseMatrix(self.cols, self.rows, self.def)
+        int a = 0
+        while (a < self.nnz) {
+            t.set(self.cindices[a], self.rindices[a], self.values[a])
+            a = a + 1
+        }
+        return t
+    }
+    fn multiply(SparseMatrix other) SparseMatrix {
+        f64 da = self.def - 0.0
+        f64 db = other.def - 0.0
+        int dense_mode = 0
+        if (da != 0.0) {
+            dense_mode = 1
+        }
+        if (db != 0.0) {
+            dense_mode = 1
+        }
+        if (dense_mode == 1) {
+            Matrix a = self.to_dense()
+            Matrix b = other.to_dense()
+            Matrix c = a.mul(b)
+            SparseMatrix r_dense = SparseMatrix(self.rows, other.cols, 0.0)
+            int i = 0
+            while (i < c.rows()) {
+                int j = 0
+                while (j < c.cols()) {
+                    f64 v = c.get(i, j)
+                    f64 dz = v - 0.0
+                    if (dz != 0.0) {
+                        r_dense.set(i, j, v)
+                    }
+                    j = j + 1
+                }
+                i = i + 1
+            }
+            return r_dense
+        }
+        SparseMatrix r = SparseMatrix(self.rows, other.cols, 0.0)
+        int a = 0
+        while (a < self.nnz) {
+            int i = self.rindices[a]
+            int k = self.cindices[a]
+            f64 av = self.values[a]
+            int b = 0
+            while (b < other.nnz) {
+                if (other.rindices[b] == k) {
+                    int j = other.cindices[b]
+                    f64 cur = r.get(i, j)
+                    r.set(i, j, cur + av * other.values[b])
+                }
+                b = b + 1
+            }
+            a = a + 1
+        }
+        return r
+    }
+    fn print() {
+        println("默认值: ")
+        println(self.def)
+        println("非默认元素数: ")
+        println(self.nnz)
+        int a = 0
+        while (a < self.nnz) {
+            println("(")
+            println(self.rindices[a])
+            println(", ")
+            println(self.cindices[a])
+            println(") = ")
+            println(self.values[a])
+            a = a + 1
+        }
+    }
+    constructor(int r, int c, f64 d) {
+        self.rows = r
+        self.cols = c
+        self.def = d
+        self.nnz = 0
+        self.cap = 0
+    }
+}
+
+fn matrix_sparse(r: int, c: int) SparseMatrix {
+    return SparseMatrix(r, c, 0.0)
+}
+
+fn matrix_sparse_identity(n: int) SparseMatrix {
+    SparseMatrix m = SparseMatrix(n, n, 0.0)
+    int i = 0
+    while (i < n) {
+        m.set(i, i, 1.0)
+        i = i + 1
+    }
+    return m
+}
+
+fn matrix_sparse_from_dense(m: Matrix) SparseMatrix {
+    SparseMatrix s = SparseMatrix(m.rows(), m.cols(), 0.0)
+    int i = 0
+    while (i < m.rows()) {
+        int j = 0
+        while (j < m.cols()) {
+            f64 v = m.get(i, j)
+            f64 dz = v - 0.0
+            if (dz != 0.0) {
+                s.set(i, j, v)
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    return s
+}
+
+fn matrix_sparse_compress(m: Matrix) SparseMatrix {
+    int r = m.rows()
+    int c = m.cols()
+    int n = r * c
+    f64* vals = std.memory.kmm_v4_alloc(n * 8)
+    int* cnts = std.memory.kmm_v4_alloc(n * 4)
+    int nv = 0
+    int i = 0
+    while (i < r) {
+        int j = 0
+        while (j < c) {
+            f64 v = m.get(i, j)
+            int k = 0
+            int found = -1
+            while (k < nv) {
+                f64 d = vals[k] - v
+                if (d == 0.0) {
+                    found = k
+                }
+                k = k + 1
+            }
+            if (found >= 0) {
+                cnts[found] = cnts[found] + 1
+            } else {
+                vals[nv] = v
+                cnts[nv] = 1
+                nv = nv + 1
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    f64 defv = 0.0
+    int found_def = -1
+    int half = n / 2
+    int k2 = 0
+    while (k2 < nv) {
+        if (cnts[k2] > half) {
+            found_def = k2
+        }
+        k2 = k2 + 1
+    }
+    if (found_def >= 0) {
+        defv = vals[found_def]
+    }
+    SparseMatrix s = SparseMatrix(r, c, defv)
+    int i2 = 0
+    while (i2 < r) {
+        int j2 = 0
+        while (j2 < c) {
+            f64 v = m.get(i2, j2)
+            f64 d = v - defv
+            if (d != 0.0) {
+                s.set(i2, j2, v)
+            }
+            j2 = j2 + 1
+        }
+        i2 = i2 + 1
+    }
+    return s
+}
+
 fn main() {
     println("=== Kaula Eigen demo ===")
     println("")
@@ -1149,4 +1465,74 @@ fn main() {
     println("Random(2, 2) =")
     Matrix rnd = matrix_random(2, 2)
     rnd.print()
+    println("")
+    println("=== SparseMatrix demo ===")
+    println("")
+    println("稀疏单位阵 I(5) 非零元:")
+    SparseMatrix si = matrix_sparse_identity(5)
+    si.print()
+    println("")
+    println("稀疏矩阵 A(5x5, 默认 0.0, 例外 3 个):")
+    SparseMatrix spa = matrix_sparse(5, 5)
+    spa.set(0, 0, 1.5)
+    spa.set(2, 3, -2.0)
+    spa.set(4, 4, 3.0)
+    spa.print()
+    println("")
+    println("A 转置:")
+    SparseMatrix spat = spa.transpose()
+    spat.print()
+    println("")
+    println("稀疏乘法 A * I =")
+    SparseMatrix spai = spa.multiply(si)
+    spai.print()
+    println("")
+    println("稀疏加法 A + I =")
+    SparseMatrix spsum = spa.add(si)
+    spsum.print()
+    println("")
+    println("大部分相同矩阵 B(4x4, 默认 7.0, 例外 2 个):")
+    SparseMatrix spb = SparseMatrix(4, 4, 7.0)
+    spb.set(1, 1, 0.0)
+    spb.set(2, 2, -1.0)
+    spb.print()
+    println("")
+    println("B 的稠密表示(7 填充, 例外覆盖):")
+    Matrix spbd = spb.to_dense()
+    spbd.print()
+    println("")
+    println("B 数乘 2.0 =")
+    SparseMatrix spbs = spb.scalar_mul(2.0)
+    spbs.print()
+    println("")
+    println("稠密转稀疏(D 的对角线):")
+    Matrix spdm = matrix_identity(3)
+    SparseMatrix spds = matrix_sparse_from_dense(spdm)
+    spds.print()
+    println("")
+    println("自动压缩(大部分相同): 4x4 矩阵 13 个 7.0 + 3 个例外")
+    Matrix cpm = Matrix(4, 4)
+    int ci = 0
+    while (ci < 4) {
+        int cj = 0
+        while (cj < 4) {
+            cpm.set(ci, cj, 7.0)
+            cj = cj + 1
+        }
+        ci = ci + 1
+    }
+    cpm.set(1, 1, 0.0)
+    cpm.set(2, 2, -1.0)
+    cpm.set(3, 0, 3.5)
+    SparseMatrix cps = matrix_sparse_compress(cpm)
+    cps.print()
+    println("")
+    println("自动压缩(无多数值): 退化为标准稀疏")
+    Matrix cpm2 = Matrix(2, 2)
+    cpm2.set(0, 0, 1.0)
+    cpm2.set(0, 1, 2.0)
+    cpm2.set(1, 0, 3.0)
+    cpm2.set(1, 1, 0.0)
+    SparseMatrix cps2 = matrix_sparse_compress(cpm2)
+    cps2.print()
 }
