@@ -1,0 +1,14 @@
+pub fn matrix_mul(int a, int b) int {
+    return a * b
+}
+
+pub fn vector_norm(int v) int {
+    return v
+}
+
+fn secret_fn() {
+}
+
+pub fn get_data() int {
+    return 42
+}

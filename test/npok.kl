@@ -1,0 +1,23 @@
+class Box {
+    v: int
+    constructor(int v) {
+        self.v = v
+    }
+    fn get() int {
+        return self.v
+    }
+}
+
+fn take_box(Box b) int {
+    return b.get()
+}
+
+fn main() {
+    Box? b = null
+    if (b != null) {
+        int x = b.get()
+        int r = take_box(b)
+        println(x)
+        println(r)
+    }
+}

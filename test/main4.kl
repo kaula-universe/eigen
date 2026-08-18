@@ -1,0 +1,6 @@
+import lib
+
+fn main() {
+    int x = matrix_mlu(2, 3)
+    println(x)
+}

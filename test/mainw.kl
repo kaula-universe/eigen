@@ -1,0 +1,12 @@
+import lib
+
+fn main() {
+    int x = lib.matrix_mul(2, 3)
+    if (x == 3) {
+        println(x)
+    } else if (x == 4) {
+        println(x)
+    } else if (x == 5) {
+        println(x)
+    }
+}

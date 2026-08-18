@@ -1,0 +1,15 @@
+fn take_string(string s) int {
+    return 0
+}
+
+fn ret_string() string {
+    string? tmp = null
+    return tmp
+}
+
+fn main() {
+    string? s = null
+    int len = s.length()
+    string s2 = s
+    int r = take_string(s)
+}

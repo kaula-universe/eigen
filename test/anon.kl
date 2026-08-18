@@ -1,0 +1,12 @@
+struct {
+    x: int
+    y: int
+}
+
+class {
+    v: int
+}
+
+fn main() {
+    println("hello")
+}

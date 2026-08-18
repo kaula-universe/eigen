@@ -1,0 +1,25 @@
+fn helper_unused() int {
+    return 1
+}
+
+enum Color {
+    Red
+    Green
+    Blue
+}
+
+fn main() {
+    u8 small = 300
+    f64 x = 1.5
+    f64 y = 2.5
+    if (x == y) {
+        println(1)
+    }
+    int w = 3
+    w = 5
+    Color c = Red
+    match (c) {
+        Red => println(1)
+        Green => println(2)
+    }
+}
