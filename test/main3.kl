@@ -1,5 +1,0 @@
-import lib
-
-fn main() {
-    lib.secret_fn()
-}

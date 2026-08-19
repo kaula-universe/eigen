@@ -2,5 +2,8 @@
 *.exe
 cache/
 
+# 测试目录(本地资产,不提交)
+test/
+
 # Eigen C++ 源码(本地参考,不入库)
 eigen-cpp/

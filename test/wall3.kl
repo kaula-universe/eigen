@@ -1,7 +1,0 @@
-fn main() {
-    int d = 10 / 0
-    int x = 5
-    if (x == x) {
-        println(1)
-    }
-}

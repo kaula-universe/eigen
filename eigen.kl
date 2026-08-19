@@ -1,684 +1,223 @@
 import std.math
 import std.memory
+import "C:/Code/algebra/algebra"
+import std.algebra
 
 class Matrix {
     rows: int
     cols: int
-    data: f64*
-    fn rows() int {
-        return self.rows
-    }
-    fn cols() int {
-        return self.cols
-    }
-    fn set(int i, int j, f64 v) {
-        self.data[i * self.cols + j] = v
-    }
-    fn get(int i, int j) f64 {
-        return self.data[i * self.cols + j]
-    }
-    fn fill(f64 v) {
-        int n = self.rows * self.cols
+    data: Expr*
+
+    constructor(int r, int c) {
+        self.rows = r
+        self.cols = c
+        self.data = std.memory.std_malloc(r * c * sizeof(Expr))
+        int n = r * c
         int i = 0
         while (i < n) {
-            self.data[i] = v
+            self.data[i] = expr_rat(0, 1)
             i = i + 1
         }
     }
-    fn copy() Matrix {
-        Matrix c = Matrix(self.rows, self.cols)
+
+    fn rows() int {
+        return self.rows
+    }
+
+    fn cols() int {
+        return self.cols
+    }
+
+    fn set(int i, int j, Expr v) {
+        self.data[i * self.cols + j] = v
+    }
+
+    fn get(int i, int j) Expr {
+        return self.data[i * self.cols + j]
+    }
+
+    fn fill(Expr v) {
         int i = 0
         while (i < self.rows) {
             int j = 0
             while (j < self.cols) {
-                c.set(i, j, self.get(i, j))
+                self.set(i, j, v)
                 j = j + 1
             }
             i = i + 1
         }
-        return c
     }
+
+    fn copy() Matrix {
+        Matrix r = Matrix(self.rows, self.cols)
+        int i = 0
+        while (i < self.rows) {
+            int j = 0
+            while (j < self.cols) {
+                r.set(i, j, self.get(i, j))
+                j = j + 1
+            }
+            i = i + 1
+        }
+        return r
+    }
+
     fn add(Matrix other) Matrix {
         Matrix r = Matrix(self.rows, self.cols)
-        int n = self.rows * self.cols
         int i = 0
-        while (i < n) {
-            r.data[i] = self.data[i] + other.data[i]
+        while (i < self.rows) {
+            int j = 0
+            while (j < self.cols) {
+                Expr a = self.get(i, j)
+                Expr b = other.get(i, j)
+                r.set(i, j, simplify(expr_add(a, b)))
+                j = j + 1
+            }
             i = i + 1
         }
         return r
     }
+
     fn sub(Matrix other) Matrix {
         Matrix r = Matrix(self.rows, self.cols)
-        int n = self.rows * self.cols
         int i = 0
-        while (i < n) {
-            r.data[i] = self.data[i] - other.data[i]
+        while (i < self.rows) {
+            int j = 0
+            while (j < self.cols) {
+                Expr a = self.get(i, j)
+                Expr b = other.get(i, j)
+                r.set(i, j, simplify(expr_sub(a, b)))
+                j = j + 1
+            }
             i = i + 1
         }
         return r
     }
+
     fn mul(Matrix other) Matrix {
         Matrix r = Matrix(self.rows, other.cols)
         int i = 0
         while (i < self.rows) {
             int j = 0
             while (j < other.cols) {
-                f64 s = 0.0
+                Expr acc = expr_rat(0, 1)
                 int k = 0
                 while (k < self.cols) {
-                    s = s + self.get(i, k) * other.get(k, j)
+                    Expr ma = self.get(i, k)
+                    Expr mb = other.get(k, j)
+                    Expr p = simplify(expr_mul(ma, mb))
+                    acc = simplify(expr_add(acc, p))
                     k = k + 1
                 }
-                r.set(i, j, s)
+                r.set(i, j, acc)
                 j = j + 1
             }
             i = i + 1
         }
         return r
     }
-    fn scalar_mul(f64 s) Matrix {
+
+    fn scalar_mul(Expr s) Matrix {
         Matrix r = Matrix(self.rows, self.cols)
-        int n = self.rows * self.cols
-        int i = 0
-        while (i < n) {
-            r.data[i] = self.data[i] * s
-            i = i + 1
-        }
-        return r
-    }
-    fn transpose() Matrix {
-        Matrix t = Matrix(self.cols, self.rows)
         int i = 0
         while (i < self.rows) {
             int j = 0
             while (j < self.cols) {
-                t.set(j, i, self.get(i, j))
+                Expr a = self.get(i, j)
+                r.set(i, j, simplify(expr_mul(a, s)))
                 j = j + 1
             }
             i = i + 1
         }
-        return t
+        return r
     }
-    fn trace() f64 {
-        f64 s = 0.0
+
+    fn transpose() Matrix {
+        Matrix r = Matrix(self.cols, self.rows)
         int i = 0
         while (i < self.rows) {
-            s = s + self.get(i, i)
+            int j = 0
+            while (j < self.cols) {
+                r.set(j, i, self.get(i, j))
+                j = j + 1
+            }
             i = i + 1
         }
-        return s
+        return r
     }
+
+    fn trace() Expr {
+        Expr acc = expr_rat(0, 1)
+        int i = 0
+        while (i < self.rows) {
+            Expr tv = self.get(i, i)
+            acc = simplify(expr_add(acc, tv))
+            i = i + 1
+        }
+        return acc
+    }
+
     fn cwise_mul(Matrix other) Matrix {
         Matrix r = Matrix(self.rows, self.cols)
-        int n = self.rows * self.cols
-        int i = 0
-        while (i < n) {
-            r.data[i] = self.data[i] * other.data[i]
-            i = i + 1
-        }
-        return r
-    }
-    fn cwise_div(Matrix other) Matrix {
-        Matrix r = Matrix(self.rows, self.cols)
-        int n = self.rows * self.cols
-        int i = 0
-        while (i < n) {
-            r.data[i] = self.data[i] / other.data[i]
-            i = i + 1
-        }
-        return r
-    }
-    fn square() Matrix {
-        Matrix r = Matrix(self.rows, self.cols)
-        int n = self.rows * self.cols
-        int i = 0
-        while (i < n) {
-            r.data[i] = self.data[i] * self.data[i]
-            i = i + 1
-        }
-        return r
-    }
-    fn sqrt() Matrix {
-        Matrix r = Matrix(self.rows, self.cols)
-        int n = self.rows * self.cols
-        int i = 0
-        while (i < n) {
-            r.data[i] = std.math.math_sqrt(self.data[i])
-            i = i + 1
-        }
-        return r
-    }
-    fn abs() Matrix {
-        Matrix r = Matrix(self.rows, self.cols)
-        int n = self.rows * self.cols
-        int i = 0
-        while (i < n) {
-            r.data[i] = std.math.math_abs(self.data[i])
-            i = i + 1
-        }
-        return r
-    }
-    fn cwise_min(Matrix other) Matrix {
-        Matrix r = Matrix(self.rows, self.cols)
-        int n = self.rows * self.cols
-        int i = 0
-        while (i < n) {
-            if (self.data[i] < other.data[i]) {
-                r.data[i] = self.data[i]
-            } else {
-                r.data[i] = other.data[i]
-            }
-            i = i + 1
-        }
-        return r
-    }
-    fn cwise_max(Matrix other) Matrix {
-        Matrix r = Matrix(self.rows, self.cols)
-        int n = self.rows * self.cols
-        int i = 0
-        while (i < n) {
-            if (self.data[i] > other.data[i]) {
-                r.data[i] = self.data[i]
-            } else {
-                r.data[i] = other.data[i]
-            }
-            i = i + 1
-        }
-        return r
-    }
-    fn sum() f64 {
-        f64 s = 0.0
-        int n = self.rows * self.cols
-        int i = 0
-        while (i < n) {
-            s = s + self.data[i]
-            i = i + 1
-        }
-        return s
-    }
-    fn mean() f64 {
-        f64 s = self.sum()
-        return s / (self.rows * self.cols)
-    }
-    fn min_coeff() f64 {
-        f64 mn = self.data[0]
-        int n = self.rows * self.cols
-        int i = 1
-        while (i < n) {
-            if (self.data[i] < mn) {
-                mn = self.data[i]
-            }
-            i = i + 1
-        }
-        return mn
-    }
-    fn max_coeff() f64 {
-        f64 mx = self.data[0]
-        int n = self.rows * self.cols
-        int i = 1
-        while (i < n) {
-            if (self.data[i] > mx) {
-                mx = self.data[i]
-            }
-            i = i + 1
-        }
-        return mx
-    }
-    fn dot(Matrix other) f64 {
-        f64 s = 0.0
-        int n = self.rows * self.cols
-        int i = 0
-        while (i < n) {
-            s = s + self.data[i] * other.data[i]
-            i = i + 1
-        }
-        return s
-    }
-    fn norm() f64 {
-        f64 s = 0.0
-        int n = self.rows * self.cols
-        int i = 0
-        while (i < n) {
-            s = s + self.data[i] * self.data[i]
-            i = i + 1
-        }
-        return std.math.math_sqrt(s)
-    }
-    fn norm1() f64 {
-        f64 s = 0.0
-        int n = self.rows * self.cols
-        int i = 0
-        while (i < n) {
-            s = s + std.math.math_abs(self.data[i])
-            i = i + 1
-        }
-        return s
-    }
-    fn norm_inf() f64 {
-        f64 mx = 0.0
-        int n = self.rows * self.cols
-        int i = 0
-        while (i < n) {
-            f64 a = std.math.math_abs(self.data[i])
-            if (a > mx) {
-                mx = a
-            }
-            i = i + 1
-        }
-        return mx
-    }
-    fn normalized() Matrix {
-        f64 n = self.norm()
-        if (n == 0.0) {
-            return self.copy()
-        }
-        return self.scalar_mul(1.0 / n)
-    }
-    fn row(int i) Matrix {
-        Matrix r = Matrix(1, self.cols)
-        int j = 0
-        while (j < self.cols) {
-            r.set(0, j, self.get(i, j))
-            j = j + 1
-        }
-        return r
-    }
-    fn col(int j) Matrix {
-        Matrix c = Matrix(self.rows, 1)
-        int i = 0
-        while (i < self.rows) {
-            c.set(i, 0, self.get(i, j))
-            i = i + 1
-        }
-        return c
-    }
-    fn block(int r0, int c0, int rn, int cn) Matrix {
-        Matrix b = Matrix(rn, cn)
-        int i = 0
-        while (i < rn) {
-            int j = 0
-            while (j < cn) {
-                b.set(i, j, self.get(r0 + i, c0 + j))
-                j = j + 1
-            }
-            i = i + 1
-        }
-        return b
-    }
-    fn hstack(Matrix other) Matrix {
-        Matrix r = Matrix(self.rows, self.cols + other.cols)
         int i = 0
         while (i < self.rows) {
             int j = 0
             while (j < self.cols) {
-                r.set(i, j, self.get(i, j))
+                Expr a = self.get(i, j)
+                Expr b = other.get(i, j)
+                r.set(i, j, simplify(expr_mul(a, b)))
                 j = j + 1
-            }
-            int k = 0
-            while (k < other.cols) {
-                r.set(i, self.cols + k, other.get(i, k))
-                k = k + 1
             }
             i = i + 1
         }
         return r
     }
-    fn vstack(Matrix other) Matrix {
-        Matrix r = Matrix(self.rows + other.rows, self.cols)
-        int i = 0
-        while (i < self.rows) {
-            int j = 0
-            while (j < self.cols) {
-                r.set(i, j, self.get(i, j))
-                j = j + 1
-            }
-            i = i + 1
-        }
-        int k = 0
-        while (k < other.rows) {
-            int j2 = 0
-            while (j2 < other.cols) {
-                r.set(self.rows + k, j2, other.get(k, j2))
-                j2 = j2 + 1
-            }
-            k = k + 1
-        }
-        return r
-    }
-    fn diagonal() Matrix {
-        int n = self.rows
-        if (self.cols < n) {
-            n = self.cols
-        }
-        Matrix d = Matrix(n, 1)
-        int i = 0
-        while (i < n) {
-            d.set(i, 0, self.get(i, i))
-            i = i + 1
-        }
-        return d
-    }
-    fn cholesky() Matrix {
-        Matrix l = Matrix(self.rows, self.cols)
-        int i = 0
-        while (i < self.rows) {
-            int j = 0
-            while (j <= i) {
-                f64 s = 0.0
-                int k = 0
-                while (k < j) {
-                    s = s + l.get(i, k) * l.get(j, k)
-                    k = k + 1
-                }
-                if (i == j) {
-                    f64 d = self.get(i, i) - s
-                    if (d <= 0.0) {
-                        return Matrix(self.rows, self.cols)
-                    }
-                    l.set(i, i, std.math.math_sqrt(d))
-                } else {
-                    l.set(i, j, (self.get(i, j) - s) / l.get(j, j))
-                }
-                j = j + 1
-            }
-            i = i + 1
-        }
-        return l
-    }
-    fn qr_q() Matrix {
-        Matrix q = Matrix(self.rows, self.cols)
+
+    fn swap_rows(int a, int b) {
         int j = 0
         while (j < self.cols) {
-            int r = 0
-            while (r < self.rows) {
-                q.set(r, j, self.get(r, j))
-                r = r + 1
-            }
-            int i = 0
-            while (i < j) {
-                f64 proj = 0.0
-                int r2 = 0
-                while (r2 < self.rows) {
-                    proj = proj + q.get(r2, i) * self.get(r2, j)
-                    r2 = r2 + 1
-                }
-                int r3 = 0
-                while (r3 < self.rows) {
-                    f64 nv = q.get(r3, j) - proj * q.get(r3, i)
-                    q.set(r3, j, nv)
-                    r3 = r3 + 1
-                }
-                i = i + 1
-            }
-            f64 nrm = 0.0
-            int r4 = 0
-            while (r4 < self.rows) {
-                nrm = nrm + q.get(r4, j) * q.get(r4, j)
-                r4 = r4 + 1
-            }
-            f64 len = std.math.math_sqrt(nrm)
-            if (len > 0.0) {
-                int r5 = 0
-                while (r5 < self.rows) {
-                    f64 nv2 = q.get(r5, j) / len
-                    q.set(r5, j, nv2)
-                    r5 = r5 + 1
-                }
-            }
+            Expr t = self.get(a, j)
+            self.set(a, j, self.get(b, j))
+            self.set(b, j, t)
             j = j + 1
         }
-        return q
     }
-    fn qr_r() Matrix {
-        Matrix q = self.qr_q()
-        Matrix r = Matrix(self.cols, self.cols)
-        int j = 0
-        while (j < self.cols) {
-            int i = 0
-            while (i <= j) {
-                f64 s = 0.0
-                int k = 0
-                while (k < self.rows) {
-                    s = s + q.get(k, i) * self.get(k, j)
-                    k = k + 1
-                }
-                r.set(i, j, s)
-                i = i + 1
-            }
-            j = j + 1
-        }
-        return r
-    }
-    fn eigen_values() Matrix {
-        Matrix a = self.copy()
-        int n = a.rows
-        int iter = 0
-        while (iter < 100) {
-            f64 mx = 0.0
-            int p = 0
-            int q = 1
-            int i = 0
-            while (i < n) {
-                int j = i + 1
-                while (j < n) {
-                    f64 av = a.get(i, j)
-                    if (av < 0.0) {
-                        av = -av
-                    }
-                    if (av > mx) {
-                        mx = av
-                        p = i
-                        q = j
-                    }
-                    j = j + 1
-                }
-                i = i + 1
-            }
-            if (mx < 1e-12) {
-                break
-            }
-            f64 app = a.get(p, p)
-            f64 aqq = a.get(q, q)
-            f64 apq = a.get(p, q)
-            f64 theta = (aqq - app) / (2.0 * apq)
-            f64 t = 1.0
-            if (theta >= 0.0) {
-                t = 1.0 / (theta + std.math.math_sqrt(1.0 + theta * theta))
-            } else {
-                t = -1.0 / (-theta + std.math.math_sqrt(1.0 + theta * theta))
-            }
-            f64 c = 1.0 / std.math.math_sqrt(1.0 + t * t)
-            f64 s = t * c
-            int k = 0
-            while (k < n) {
-                f64 akp = a.get(k, p)
-                f64 akq = a.get(k, q)
-                a.set(k, p, c * akp - s * akq)
-                a.set(p, k, c * akp - s * akq)
-                a.set(k, q, s * akp + c * akq)
-                a.set(q, k, s * akp + c * akq)
-                k = k + 1
-            }
-            a.set(p, p, c * c * app - 2.0 * c * s * apq + s * s * aqq)
-            a.set(q, q, s * s * app + 2.0 * c * s * apq + c * c * aqq)
-            a.set(p, q, 0.0)
-            a.set(q, p, 0.0)
-            iter = iter + 1
-        }
-        Matrix ev = Matrix(n, n)
-        int i2 = 0
-        while (i2 < n) {
-            ev.set(i2, i2, a.get(i2, i2))
-            i2 = i2 + 1
-        }
-        return ev
-    }
-    fn eigen_vectors() Matrix {
-        Matrix a = self.copy()
-        int n = a.rows
-        Matrix p = Matrix(n, n)
-        int i0 = 0
-        while (i0 < n) {
-            p.set(i0, i0, 1.0)
-            i0 = i0 + 1
-        }
-        int iter = 0
-        while (iter < 100) {
-            f64 mx = 0.0
-            int p2 = 0
-            int q2 = 1
-            int i = 0
-            while (i < n) {
-                int j = i + 1
-                while (j < n) {
-                    f64 av = a.get(i, j)
-                    if (av < 0.0) {
-                        av = -av
-                    }
-                    if (av > mx) {
-                        mx = av
-                        p2 = i
-                        q2 = j
-                    }
-                    j = j + 1
-                }
-                i = i + 1
-            }
-            if (mx < 1e-12) {
-                break
-            }
-            f64 app = a.get(p2, p2)
-            f64 aqq = a.get(q2, q2)
-            f64 apq = a.get(p2, q2)
-            f64 theta = (aqq - app) / (2.0 * apq)
-            f64 t = 1.0
-            if (theta >= 0.0) {
-                t = 1.0 / (theta + std.math.math_sqrt(1.0 + theta * theta))
-            } else {
-                t = -1.0 / (-theta + std.math.math_sqrt(1.0 + theta * theta))
-            }
-            f64 c = 1.0 / std.math.math_sqrt(1.0 + t * t)
-            f64 s = t * c
-            int k = 0
-            while (k < n) {
-                f64 akp = a.get(k, p2)
-                f64 akq = a.get(k, q2)
-                a.set(k, p2, c * akp - s * akq)
-                a.set(p2, k, c * akp - s * akq)
-                a.set(k, q2, s * akp + c * akq)
-                a.set(q2, k, s * akp + c * akq)
-                k = k + 1
-            }
-            a.set(p2, p2, c * c * app - 2.0 * c * s * apq + s * s * aqq)
-            a.set(q2, q2, s * s * app + 2.0 * c * s * apq + c * c * aqq)
-            a.set(p2, q2, 0.0)
-            a.set(q2, p2, 0.0)
-            int k2 = 0
-            while (k2 < n) {
-                f64 pkp = p.get(k2, p2)
-                f64 pkq = p.get(k2, q2)
-                p.set(k2, p2, c * pkp - s * pkq)
-                p.set(k2, q2, s * pkp + c * pkq)
-                k2 = k2 + 1
-            }
-            iter = iter + 1
-        }
-        return p
-    }
-    fn svd_s() Matrix {
-        Matrix t = self.transpose()
-        Matrix ata = t.mul(self)
-        Matrix ev = ata.eigen_values()
-        int n = self.cols
-        Matrix vals = Matrix(n, 1)
-        int i = 0
-        while (i < n) {
-            vals.set(i, 0, ev.get(i, i))
-            i = i + 1
-        }
-        vals.sort_desc()
-        Matrix s = Matrix(n, n)
-        int j = 0
-        while (j < n) {
-            f64 v = vals.get(j, 0)
-            if (v < 0.0) {
-                v = 0.0
-            }
-            s.set(j, j, std.math.math_sqrt(v))
-            j = j + 1
-        }
-        return s
-    }
-    fn svd_u() Matrix {
-        Matrix t = self.transpose()
-        Matrix ata = t.mul(self)
-        Matrix ev = ata.eigen_values()
-        Matrix v = ata.eigen_vectors()
-        ev.sort_eigen_desc(v)
-        Matrix u = Matrix(self.rows, self.cols)
-        int c = 0
-        while (c < self.cols) {
-            f64 e = ev.get(c, c)
-            f64 s = 0.0
-            if (e > 0.0) {
-                s = std.math.math_sqrt(e)
-            }
-            int r = 0
-            while (r < self.rows) {
-                f64 acc = 0.0
-                int k = 0
-                while (k < self.cols) {
-                    acc = acc + self.get(r, k) * v.get(k, c)
-                    k = k + 1
-                }
-                if (s > 1e-300) {
-                    u.set(r, c, acc / s)
-                } else {
-                    u.set(r, c, 0.0)
-                }
-                r = r + 1
-            }
-            c = c + 1
-        }
-        return u
-    }
-    fn svd_v() Matrix {
-        Matrix t = self.transpose()
-        Matrix ata = t.mul(self)
-        Matrix ev = ata.eigen_values()
-        Matrix v = ata.eigen_vectors()
-        ev.sort_eigen_desc(v)
-        return v
-    }
-    fn determinant() f64 {
+
+    # 符号行列式: 高斯消元(符号除法, 精确表达式)
+    fn determinant() Expr {
         Matrix w = self.copy()
-        f64 det = 1.0
+        Expr det = expr_rat(1, 1)
         int i = 0
         while (i < w.rows) {
-            int piv = i
-            int k = i + 1
-            while (k < w.rows) {
-                if (w.get(k, i) > w.get(piv, i)) {
-                    piv = k
+            Expr p = w.get(i, i)
+            if (p.kind == 0 && std.algebra.bigint_to_i64(&p.num) == 0) {
+                # 常数零主元: 找下方非零行交换(换行变号)
+                int piv = -1
+                int k = i + 1
+                while (k < w.rows) {
+                    Expr q = w.get(k, i)
+                    if (q.kind != 0 || std.algebra.bigint_to_i64(&q.num) != 0) {
+                        piv = k
+                    }
+                    k = k + 1
                 }
-                k = k + 1
-            }
-            if (w.get(piv, i) == 0.0) {
-                return 0.0
-            }
-            if (piv != i) {
+                if (piv < 0) {
+                    return expr_rat(0, 1)
+                }
                 w.swap_rows(piv, i)
-                det = -det
+                det = simplify(expr_mul(det, expr_rat(-1, 1)))
+                p = w.get(i, i)
             }
-            f64 p = w.get(i, i)
-            det = det * p
+            det = simplify(expr_mul(det, p))
             int r = i + 1
             while (r < w.rows) {
-                f64 f = w.get(r, i) / p
+                Expr pv = w.get(r, i)
+                Expr f = simplify(expr_div(pv, p))
                 int c = i
                 while (c < w.cols) {
-                    f64 nv = w.get(r, c) - f * w.get(i, c)
+                    Expr c1 = w.get(r, c)
+                    Expr c2 = simplify(expr_mul(f, w.get(i, c)))
+                    Expr nv = simplify(expr_sub(c1, c2))
                     w.set(r, c, nv)
                     c = c + 1
                 }
@@ -688,217 +227,149 @@ class Matrix {
         }
         return det
     }
+
+    # 符号逆矩阵: 增广矩阵高斯消元(精确表达式)
     fn inverse() Matrix {
-        Matrix inv = Matrix(self.rows, self.cols)
-        Matrix w = self.copy()
+        int n = self.rows
+        Matrix aug = Matrix(n, 2 * n)
         int i = 0
-        while (i < w.rows) {
-            inv.set(i, i, 1.0)
-            i = i + 1
-        }
-        int col = 0
-        while (col < w.rows) {
-            int piv = col
-            int k = col + 1
-            while (k < w.rows) {
-                if (w.get(k, col) > w.get(piv, col)) {
-                    piv = k
-                }
-                k = k + 1
-            }
-            if (w.get(piv, col) == 0.0) {
-                return Matrix(self.rows, self.cols)
-            }
-            if (piv != col) {
-                w.swap_rows(piv, col)
-                inv.swap_rows(piv, col)
-            }
-            f64 p = w.get(col, col)
-            int c = 0
-            while (c < w.cols) {
-                f64 nv = w.get(col, c) / p
-                w.set(col, c, nv)
-                f64 iv = inv.get(col, c) / p
-                inv.set(col, c, iv)
-                c = c + 1
-            }
-            int r = 0
-            while (r < w.rows) {
-                if (r != col) {
-                    f64 f = w.get(r, col)
-                    int cc = 0
-                    while (cc < w.cols) {
-                        f64 nw = w.get(r, cc) - f * w.get(col, cc)
-                        w.set(r, cc, nw)
-                        f64 ni = inv.get(r, cc) - f * inv.get(col, cc)
-                        inv.set(r, cc, ni)
-                        cc = cc + 1
-                    }
-                }
-                r = r + 1
-            }
-            col = col + 1
-        }
-        return inv
-    }
-    fn solve(Matrix b) Matrix {
-        Matrix aug = Matrix(self.rows, self.cols + 1)
-        int i = 0
-        while (i < self.rows) {
+        while (i < n) {
             int j = 0
-            while (j < self.cols) {
+            while (j < n) {
                 aug.set(i, j, self.get(i, j))
                 j = j + 1
             }
-            aug.set(i, self.cols, b.get(i, 0))
+            int j2 = 0
+            while (j2 < n) {
+                if (i == j2) {
+                    aug.set(i, n + j2, expr_rat(1, 1))
+                } else {
+                    aug.set(i, n + j2, expr_rat(0, 1))
+                }
+                j2 = j2 + 1
+            }
             i = i + 1
         }
-        int col = 0
-        while (col < self.rows) {
-            int piv = col
-            int k = col + 1
-            while (k < self.rows) {
-                if (aug.get(k, col) > aug.get(piv, col)) {
-                    piv = k
-                }
-                k = k + 1
-            }
-            if (aug.get(piv, col) == 0.0) {
+        int i2 = 0
+        while (i2 < n) {
+            Expr p = aug.get(i2, i2)
+            if (p.kind == 0 && std.algebra.bigint_to_i64(&p.num) == 0) {
                 return Matrix(0, 0)
             }
-            if (piv != col) {
-                aug.swap_rows(piv, col)
+            int j3 = 0
+            while (j3 < 2 * n) {
+                Expr av = aug.get(i2, j3)
+                aug.set(i2, j3, simplify(expr_div(av, p)))
+                j3 = j3 + 1
             }
-            f64 p = aug.get(col, col)
-            int r = col + 1
-            while (r < self.rows) {
-                f64 f = aug.get(r, col) / p
-                int c = col
-                while (c < aug.cols) {
-                    f64 nv = aug.get(r, c) - f * aug.get(col, c)
-                    aug.set(r, c, nv)
-                    c = c + 1
+            int r = 0
+            while (r < n) {
+                if (r != i2) {
+                    Expr f = aug.get(r, i2)
+                    int c2 = 0
+                    while (c2 < 2 * n) {
+                        Expr c1 = aug.get(r, c2)
+                        Expr c2v = simplify(expr_mul(f, aug.get(i2, c2)))
+                        Expr nv = simplify(expr_sub(c1, c2v))
+                        aug.set(r, c2, nv)
+                        c2 = c2 + 1
+                    }
                 }
                 r = r + 1
             }
-            col = col + 1
+            i2 = i2 + 1
         }
-        Matrix x = Matrix(self.rows, 1)
-        int row = self.rows - 1
-        while (row >= 0) {
-            f64 s = aug.get(row, self.cols)
-            int j2 = row + 1
-            while (j2 < self.cols) {
-                s = s - aug.get(row, j2) * x.get(j2, 0)
-                j2 = j2 + 1
+        Matrix inv = Matrix(n, n)
+        int i3 = 0
+        while (i3 < n) {
+            int j4 = 0
+            while (j4 < n) {
+                inv.set(i3, j4, aug.get(i3, n + j4))
+                j4 = j4 + 1
             }
-            x.set(row, 0, s / aug.get(row, row))
-            row = row - 1
+            i3 = i3 + 1
+        }
+        return inv
+    }
+
+    # 符号解线性方程组 Ax = b(高斯消元, 精确表达式)
+    fn solve(Matrix b) Matrix {
+        int n = self.rows
+        Matrix aug = Matrix(n, n + 1)
+        int i = 0
+        while (i < n) {
+            int j = 0
+            while (j < n) {
+                aug.set(i, j, self.get(i, j))
+                j = j + 1
+            }
+            aug.set(i, n, b.get(i, 0))
+            i = i + 1
+        }
+        int i2 = 0
+        while (i2 < n) {
+            Expr p = aug.get(i2, i2)
+            if (p.kind == 0 && std.algebra.bigint_to_i64(&p.num) == 0) {
+                return Matrix(0, 0)
+            }
+            int j3 = 0
+            while (j3 < n + 1) {
+                Expr av = aug.get(i2, j3)
+                aug.set(i2, j3, simplify(expr_div(av, p)))
+                j3 = j3 + 1
+            }
+            int r = 0
+            while (r < n) {
+                if (r != i2) {
+                    Expr f = aug.get(r, i2)
+                    int c2 = 0
+                    while (c2 < n + 1) {
+                        Expr c1 = aug.get(r, c2)
+                        Expr c2v = simplify(expr_mul(f, aug.get(i2, c2)))
+                        Expr nv = simplify(expr_sub(c1, c2v))
+                        aug.set(r, c2, nv)
+                        c2 = c2 + 1
+                    }
+                }
+                r = r + 1
+            }
+            i2 = i2 + 1
+        }
+        Matrix x = Matrix(n, 1)
+        int i3 = 0
+        while (i3 < n) {
+            x.set(i3, 0, aug.get(i3, n))
+            i3 = i3 + 1
         }
         return x
     }
-    fn swap_rows(int a, int b) {
-        int j = 0
-        while (j < self.cols) {
-            f64 t = self.get(a, j)
-            self.set(a, j, self.get(b, j))
-            self.set(b, j, t)
-            j = j + 1
-        }
-    }
-    fn sort_eigen_desc(Matrix other) {
-        int n = self.rows
-        int i = 0
-        while (i < n) {
-            int j = i + 1
-            while (j < n) {
-                if (self.get(j, j) > self.get(i, i)) {
-                    f64 tv = self.get(i, i)
-                    self.set(i, i, self.get(j, j))
-                    self.set(j, j, tv)
-                    int k = 0
-                    while (k < other.rows) {
-                        f64 t = other.get(k, i)
-                        other.set(k, i, other.get(k, j))
-                        other.set(k, j, t)
-                        k = k + 1
-                    }
-                }
-                j = j + 1
-            }
-            i = i + 1
-        }
-    }
-    fn sort_desc() {
-        int n = self.rows
-        int i = 0
-        while (i < n) {
-            int j = i + 1
-            while (j < n) {
-                if (self.get(j, 0) > self.get(i, 0)) {
-                    f64 t = self.get(i, 0)
-                    self.set(i, 0, self.get(j, 0))
-                    self.set(j, 0, t)
-                }
-                j = j + 1
-            }
-            i = i + 1
-        }
-    }
+
     fn print() {
         int i = 0
         while (i < self.rows) {
             int j = 0
             while (j < self.cols) {
-                f64 v = self.get(i, j)
-                println(v)
+                Expr pv = self.get(i, j)
+                display(pv)
                 j = j + 1
             }
             i = i + 1
         }
     }
-    constructor(int r, int c) {
-        self.rows = r
-        self.cols = c
-        self.data = std.memory.kmm_v4_alloc(r * c * 8)
-    }
 }
 
+# 工厂: 符号矩阵
 fn matrix_zeros(r: int, c: int) Matrix {
     return Matrix(r, c)
 }
 
 fn matrix_ones(r: int, c: int) Matrix {
     Matrix m = Matrix(r, c)
-    int n = r * c
-    int i = 0
-    while (i < n) {
-        m.data[i] = 1.0
-        i = i + 1
-    }
-    return m
-}
-
-fn matrix_identity(n: int) Matrix {
-    Matrix m = Matrix(n, n)
-    int i = 0
-    while (i < n) {
-        m.set(i, i, 1.0)
-        i = i + 1
-    }
-    return m
-}
-
-fn matrix_random(r: int, c: int) Matrix {
-    Matrix m = Matrix(r, c)
-    int seed = 42
     int i = 0
     while (i < r) {
         int j = 0
         while (j < c) {
-            seed = (seed * 1103515245 + 12345) % 2147483648
-            f64 v = seed % 1000 / 1000.0
-            m.set(i, j, v)
+            m.set(i, j, expr_rat(1, 1))
             j = j + 1
         }
         i = i + 1
@@ -906,18 +377,25 @@ fn matrix_random(r: int, c: int) Matrix {
     return m
 }
 
-fn matrix_diag(v: Matrix) Matrix {
-    int n = v.rows
-    if (v.cols > n) {
-        n = v.cols
-    }
-    Matrix d = Matrix(n, n)
+fn matrix_eye(n: int) Matrix {
+    Matrix m = Matrix(n, n)
     int i = 0
     while (i < n) {
-        d.set(i, i, v.get(i, 0))
+        m.set(i, i, expr_rat(1, 1))
         i = i + 1
     }
-    return d
+    return m
+}
+
+fn matrix_diag(v: Matrix) Matrix {
+    int n = v.rows()
+    Matrix m = Matrix(n, n)
+    int i = 0
+    while (i < n) {
+        m.set(i, i, v.get(i, 0))
+        i = i + 1
+    }
+    return m
 }
 
 class SparseMatrix {
@@ -1024,12 +502,14 @@ class SparseMatrix {
         int n = self.rows * self.cols
         int i = 0
         while (i < n) {
-            m.data[i] = self.def
+            int iv = self.def
+            m.data[i] = expr_rat(iv, 1)
             i = i + 1
         }
         int a = 0
         while (a < self.nnz) {
-            m.set(self.rindices[a], self.cindices[a], self.values[a])
+            int iv = self.values[a]
+            m.set(self.rindices[a], self.cindices[a], expr_rat(iv, 1))
             a = a + 1
         }
         return m
@@ -1087,7 +567,7 @@ class SparseMatrix {
             while (i < c.rows()) {
                 int j = 0
                 while (j < c.cols()) {
-                    f64 v = c.get(i, j)
+                    f64 v = eval(c.get(i, j))
                     f64 dz = v - 0.0
                     if (dz != 0.0) {
                         r_dense.set(i, j, v)
@@ -1114,6 +594,34 @@ class SparseMatrix {
                 b = b + 1
             }
             a = a + 1
+        }
+        return r
+    }
+    fn mv(Matrix v) Matrix {
+        Matrix r = Matrix(self.rows, 1)
+        f64 vsum = 0.0
+        int j = 0
+        while (j < self.cols) {
+            f64 vj = eval(v.get(j, 0))
+            vsum = vsum + vj
+            j = j + 1
+        }
+        int i = 0
+        while (i < self.rows) {
+            f64 acc = 0.0
+            int a = 0
+            while (a < self.nnz) {
+                if (self.rindices[a] == i) {
+                    f64 vj = eval(v.get(self.cindices[a], 0))
+                    f64 d = self.values[a] - self.def
+                    acc = acc + d * vj
+                }
+                a = a + 1
+            }
+            f64 total = acc + self.def * vsum
+            int iv = total * 1000.0
+            r.set(i, 0, expr_rat(iv, 1000))
+            i = i + 1
         }
         return r
     }
@@ -1162,7 +670,7 @@ fn matrix_sparse_from_dense(m: Matrix) SparseMatrix {
     while (i < m.rows()) {
         int j = 0
         while (j < m.cols()) {
-            f64 v = m.get(i, j)
+            f64 v = eval(m.get(i, j))
             f64 dz = v - 0.0
             if (dz != 0.0) {
                 s.set(i, j, v)
@@ -1185,7 +693,7 @@ fn matrix_sparse_compress(m: Matrix) SparseMatrix {
     while (i < r) {
         int j = 0
         while (j < c) {
-            f64 v = m.get(i, j)
+            f64 v = eval(m.get(i, j))
             int k = 0
             int found = -1
             while (k < nv) {
@@ -1224,7 +732,7 @@ fn matrix_sparse_compress(m: Matrix) SparseMatrix {
     while (i2 < r) {
         int j2 = 0
         while (j2 < c) {
-            f64 v = m.get(i2, j2)
+            f64 v = eval(m.get(i2, j2))
             f64 d = v - defv
             if (d != 0.0) {
                 s.set(i2, j2, v)
@@ -1236,34 +744,114 @@ fn matrix_sparse_compress(m: Matrix) SparseMatrix {
     return s
 }
 
+
+class RationalMatrix {
+    rows: int
+    cols: int
+    nums: BigInt*
+    dens: BigInt*
+    constructor(int r, int c) {
+        self.rows = r
+        self.cols = c
+        int n = r * c
+        self.nums = std.memory.std_malloc(n * sizeof(BigInt))
+        self.dens = std.memory.std_malloc(n * sizeof(BigInt))
+        int i = 0
+        while (i < n) {
+            self.nums[i] = std.algebra.bigint_from_i64(0)
+            self.dens[i] = std.algebra.bigint_from_i64(1)
+            i = i + 1
+        }
+    }
+    fn set(int i, int j, Rational v) {
+        int idx = i * self.cols + j
+        self.nums[idx] = v.num
+        self.dens[idx] = v.den
+    }
+    fn get(int i, int j) Rational {
+        int idx = i * self.cols + j
+        return Rational(self.nums[idx], self.dens[idx])
+    }
+    fn add(RationalMatrix other) RationalMatrix {
+        RationalMatrix r = RationalMatrix(self.rows, self.cols)
+        int i = 0
+        while (i < self.rows) {
+            int j = 0
+            while (j < self.cols) {
+                Rational a = self.get(i, j)
+                Rational b = other.get(i, j)
+                r.set(i, j, a.add(b))
+                j = j + 1
+            }
+            i = i + 1
+        }
+        return r
+    }
+    fn mul(RationalMatrix other) RationalMatrix {
+        RationalMatrix r = RationalMatrix(self.rows, other.cols)
+        int i = 0
+        while (i < self.rows) {
+            int j = 0
+            while (j < other.cols) {
+                Rational acc = rat(0, 1)
+                int k = 0
+                while (k < self.cols) {
+                    Rational a = self.get(i, k)
+                    Rational b = other.get(k, j)
+                    Rational p = a.mul(b)
+                    acc = acc.add(p)
+                    k = k + 1
+                }
+                r.set(i, j, acc)
+                j = j + 1
+            }
+            i = i + 1
+        }
+        return r
+    }
+    fn print() {
+        int i = 0
+        while (i < self.rows) {
+            int j = 0
+            while (j < self.cols) {
+                Rational v = self.get(i, j)
+                v.print()
+                j = j + 1
+            }
+            i = i + 1
+        }
+    }
+}
+
 fn main() {
-    println("=== Kaula Eigen demo ===")
+    println("=== Kaula Eigen 符号 demo(代数库 Expr, 不近似) ===")
     println("")
+    println("A = [[1, 2], [3, 4]], B = [[5, 6], [7, 8]]")
     Matrix m = Matrix(2, 2)
-    m.set(0, 0, 1.0)
-    m.set(0, 1, 2.0)
-    m.set(1, 0, 3.0)
-    m.set(1, 1, 4.0)
-    f64 e00 = m.get(0, 0)
-    println("m(0,0) = ")
-    println(e00)
+    m.set(0, 0, expr_rat(1, 1))
+    m.set(0, 1, expr_rat(2, 1))
+    m.set(1, 0, expr_rat(3, 1))
+    m.set(1, 1, expr_rat(4, 1))
+    Expr e00 = m.get(0, 0)
+    println("m(0,0) =")
+    display(e00)
     println("")
     Matrix a = Matrix(2, 2)
-    a.set(0, 0, 1.0)
-    a.set(0, 1, 2.0)
-    a.set(1, 0, 3.0)
-    a.set(1, 1, 4.0)
+    a.set(0, 0, expr_rat(1, 1))
+    a.set(0, 1, expr_rat(2, 1))
+    a.set(1, 0, expr_rat(3, 1))
+    a.set(1, 1, expr_rat(4, 1))
     Matrix b = Matrix(2, 2)
-    b.set(0, 0, 5.0)
-    b.set(0, 1, 6.0)
-    b.set(1, 0, 7.0)
-    b.set(1, 1, 8.0)
+    b.set(0, 0, expr_rat(5, 1))
+    b.set(0, 1, expr_rat(6, 1))
+    b.set(1, 0, expr_rat(7, 1))
+    b.set(1, 1, expr_rat(8, 1))
     println("A + B =")
     Matrix s = a.add(b)
     s.print()
     println("")
     println("2 * A =")
-    Matrix sa = a.scalar_mul(2.0)
+    Matrix sa = a.scalar_mul(expr_rat(2, 1))
     sa.print()
     println("")
     println("A * B =")
@@ -1274,265 +862,146 @@ fn main() {
     Matrix t = a.transpose()
     t.print()
     println("")
-    f64 tr = a.trace()
-    println("trace(A) = ")
-    println(tr)
+    println("trace(A) =")
+    Expr tr = a.trace()
+    display(tr)
     println("")
-    f64 su = a.sum()
-    f64 me = a.mean()
-    f64 mn = a.min_coeff()
-    f64 mx = a.max_coeff()
-    println("sum(A) = ")
-    println(su)
-    println("mean(A) = ")
-    println(me)
-    println("min/max = ")
-    println(mn)
-    println(mx)
+    println("det(A) =")
+    Expr d1 = a.determinant()
+    display(d1)
     println("")
-    Matrix neg = Matrix(2, 2)
-    neg.set(0, 0, -1.0)
-    neg.set(0, 1, 4.0)
-    neg.set(1, 0, -9.0)
-    neg.set(1, 1, 16.0)
-    println("abs(neg) =")
-    Matrix ab = neg.abs()
-    ab.print()
+    println("det(diag(1,2,3,4)) = 24")
+    Matrix dd = Matrix(4, 4)
+    dd.set(0, 0, expr_rat(1, 1))
+    dd.set(1, 1, expr_rat(2, 1))
+    dd.set(2, 2, expr_rat(3, 1))
+    dd.set(3, 3, expr_rat(4, 1))
+    Expr d2 = dd.determinant()
+    display(d2)
     println("")
-    println("sqrt(abs(neg)) =")
-    Matrix sq = ab.sqrt()
-    sq.print()
+    println("matrix_zeros(2,2) =")
+    Matrix z = matrix_zeros(2, 2)
+    z.print()
     println("")
-    println("A.cwise_mul(A) =")
-    Matrix cm = a.cwise_mul(a)
-    cm.print()
+    println("稀疏矩阵 × 向量(数值稀疏 → 符号结果):")
+    SparseMatrix sp = matrix_sparse(3, 3)
+    sp.set(0, 0, 1.5)
+    sp.set(1, 0, -2.0)
+    sp.set(2, 2, 5.0)
+    Matrix vv = Matrix(3, 1)
+    vv.set(0, 0, expr_rat(1, 1))
+    vv.set(1, 0, expr_rat(2, 1))
+    vv.set(2, 0, expr_rat(3, 1))
+    Matrix sv = sp.mv(vv)
+    sv.print()
     println("")
-    Matrix v = Matrix(2, 1)
-    v.set(0, 0, 3.0)
-    v.set(1, 0, 4.0)
-    f64 nv = v.norm()
-    f64 n1 = v.norm1()
-    f64 ni = v.norm_inf()
-    println("|v| = ")
-    println(nv)
-    println("|v|_1 = ")
-    println(n1)
-    println("|v|_inf = ")
-    println(ni)
+    println("稀疏单位阵(3x3):")
+    SparseMatrix spi = matrix_sparse_identity(3)
+    spi.print()
     println("")
-    println("v.normalized() =")
-    Matrix nrm = v.normalized()
-    nrm.print()
+    println("稀疏压缩(多数 7.0 → 自动默认值):")
+    Matrix cp = Matrix(3, 3)
+    cp.set(0, 0, expr_rat(7, 1))
+    cp.set(0, 1, expr_rat(7, 1))
+    cp.set(0, 2, expr_rat(7, 1))
+    cp.set(1, 0, expr_rat(7, 1))
+    cp.set(1, 1, expr_rat(7, 1))
+    cp.set(1, 2, expr_rat(7, 1))
+    cp.set(2, 0, expr_rat(7, 1))
+    cp.set(2, 1, expr_rat(7, 1))
+    cp.set(2, 2, expr_rat(9, 1))
+    SparseMatrix spc = matrix_sparse_compress(cp)
+    spc.print()
     println("")
-    println("A.row(1) =")
-    Matrix r1 = a.row(1)
-    r1.print()
+    println("稀疏 from_dense:")
+    SparseMatrix sfd = matrix_sparse_from_dense(cp)
+    sfd.print()
     println("")
-    println("A.col(0) =")
-    Matrix c0 = a.col(0)
-    c0.print()
-    println("")
-    println("A.block(0,0,1,2) =")
-    Matrix blk = a.block(0, 0, 1, 2)
-    blk.print()
-    println("")
-    println("[A | B] =")
-    Matrix hs = a.hstack(b)
-    hs.print()
-    println("")
-    println("[A; B] =")
-    Matrix vs = a.vstack(b)
-    vs.print()
-    println("")
-    println("diag([2,3]) =")
-    Matrix dv = Matrix(2, 1)
-    dv.set(0, 0, 2.0)
-    dv.set(1, 0, 3.0)
-    Matrix dg = matrix_diag(dv)
-    dg.print()
-    println("")
-    println("diagonal of A =")
-    Matrix dl = a.diagonal()
-    dl.print()
-    println("")
-    f64 det = a.determinant()
-    println("det(A) = ")
-    println(det)
-    println("")
-    println("A^-1 =")
-    Matrix inv = a.inverse()
-    inv.print()
-    println("")
-    println("A * A^-1 =")
-    Matrix chk = a.mul(inv)
-    chk.print()
-    println("")
-    println("solve: 2x + y = 3, x + 3y = 5")
-    Matrix A = Matrix(2, 2)
-    A.set(0, 0, 2.0)
-    A.set(0, 1, 1.0)
-    A.set(1, 0, 1.0)
-    A.set(1, 1, 3.0)
-    Matrix bb = Matrix(2, 1)
-    bb.set(0, 0, 3.0)
-    bb.set(1, 0, 5.0)
-    Matrix x = A.solve(bb)
-    f64 x0 = x.get(0, 0)
-    f64 x1 = x.get(1, 0)
-    println("x = ")
-    println(x0)
-    println("y = ")
-    println(x1)
-    println("")
-    println("Cholesky of [[4,2],[2,3]] =")
-    Matrix ck = Matrix(2, 2)
-    ck.set(0, 0, 4.0)
-    ck.set(0, 1, 2.0)
-    ck.set(1, 0, 2.0)
-    ck.set(1, 1, 3.0)
-    Matrix L = ck.cholesky()
-    L.print()
-    println("")
-    println("QR of [[1,1],[0,1],[1,0]]:")
-    Matrix qa = Matrix(3, 2)
-    qa.set(0, 0, 1.0)
-    qa.set(0, 1, 1.0)
-    qa.set(1, 0, 0.0)
-    qa.set(1, 1, 1.0)
-    qa.set(2, 0, 1.0)
-    qa.set(2, 1, 0.0)
-    Matrix Q = qa.qr_q()
-    Matrix R = qa.qr_r()
-    println("Q =")
-    Q.print()
-    println("")
-    println("R =")
-    R.print()
-    println("")
-    println("Q * R =")
-    Matrix qr = Q.mul(R)
-    qr.print()
-    println("")
-    println("SVD of [[3,0],[0,-2]]:")
-    Matrix sa2 = Matrix(2, 2)
-    sa2.set(0, 0, 3.0)
-    sa2.set(0, 1, 0.0)
-    sa2.set(1, 0, 0.0)
-    sa2.set(1, 1, -2.0)
-    Matrix Su = sa2.svd_u()
-    Matrix Ss = sa2.svd_s()
-    Matrix Sv = sa2.svd_v()
-    println("U =")
-    Su.print()
-    println("")
-    println("S =")
-    Ss.print()
-    println("")
-    println("V =")
-    Sv.print()
-    println("")
-    println("U * S * V^T =")
-    Matrix us = Su.mul(Ss)
-    Matrix usv = us.mul(Sv.transpose())
-    usv.print()
-    println("")
-    println("eigen of [[2,1],[1,2]]:")
-    Matrix ea = Matrix(2, 2)
-    ea.set(0, 0, 2.0)
-    ea.set(0, 1, 1.0)
-    ea.set(1, 0, 1.0)
-    ea.set(1, 1, 2.0)
-    Matrix evec = ea.eigen_values()
-    Matrix evecs = ea.eigen_vectors()
-    println("values =")
-    evec.print()
-    println("")
-    println("vectors =")
-    evecs.print()
-    println("")
-    println("Identity(3) =")
-    Matrix id3 = matrix_identity(3)
+    println("matrix_identity(3) =")
+    Matrix id3 = matrix_eye(3)
     id3.print()
     println("")
-    println("Zeros(2, 2) =")
-    Matrix zz = matrix_zeros(2, 2)
-    zz.print()
+    println("matrix_ones(2,3) =")
+    Matrix on23 = matrix_ones(2, 3)
+    on23.print()
     println("")
-    println("Ones(2, 2) =")
-    Matrix oo = matrix_ones(2, 2)
-    oo.print()
+    println("matrix_diag([1,2,3]) =")
+    Matrix vd = Matrix(3, 1)
+    vd.set(0, 0, expr_rat(1, 1))
+    vd.set(1, 0, expr_rat(2, 1))
+    vd.set(2, 0, expr_rat(3, 1))
+    Matrix dgm = matrix_diag(vd)
+    dgm.print()
     println("")
-    println("Random(2, 2) =")
-    Matrix rnd = matrix_random(2, 2)
-    rnd.print()
+    println("A⁻¹ =")
+    Matrix ai = a.inverse()
+    ai.print()
     println("")
-    println("=== SparseMatrix demo ===")
+    println("A × A⁻¹ = I(符号验证):")
+    Matrix chk = a.mul(ai)
+    chk.print()
     println("")
-    println("稀疏单位阵 I(5) 非零元:")
-    SparseMatrix si = matrix_sparse_identity(5)
-    si.print()
+    println("solve: 2x + y = 5, 3x + 4y = 11 → x=9/5, y=7/5")
+    Matrix A = Matrix(2, 2)
+    A.set(0, 0, expr_rat(2, 1))
+    A.set(0, 1, expr_rat(1, 1))
+    A.set(1, 0, expr_rat(3, 1))
+    A.set(1, 1, expr_rat(4, 1))
+    Matrix bb = Matrix(2, 1)
+    bb.set(0, 0, expr_rat(5, 1))
+    bb.set(1, 0, expr_rat(11, 1))
+    Matrix x = A.solve(bb)
+    x.print()
     println("")
-    println("稀疏矩阵 A(5x5, 默认 0.0, 例外 3 个):")
-    SparseMatrix spa = matrix_sparse(5, 5)
-    spa.set(0, 0, 1.5)
-    spa.set(2, 3, -2.0)
-    spa.set(4, 4, 3.0)
-    spa.print()
+    println("符号矩阵: S = [[1/2, √2], [π, 2/3]]")
+    Matrix sm = Matrix(2, 2)
+    sm.set(0, 0, expr_rat(1, 2))
+    sm.set(0, 1, expr_pow(2, 1, 2))
+    sm.set(1, 0, expr_pi())
+    sm.set(1, 1, expr_rat(2, 3))
+    println("S × S =")
+    Matrix smul = sm.mul(sm)
+    smul.print()
     println("")
-    println("A 转置:")
-    SparseMatrix spat = spa.transpose()
-    spat.print()
+    println("det(S) =")
+    Expr d3 = sm.determinant()
+    display(d3)
     println("")
-    println("稀疏乘法 A * I =")
-    SparseMatrix spai = spa.multiply(si)
-    spai.print()
+    println("数值验证(仅当需要近似时 eval):")
+    f64 v = eval(dd.determinant())
+    println(v)
     println("")
-    println("稀疏加法 A + I =")
-    SparseMatrix spsum = spa.add(si)
-    spsum.print()
+    println("=== Rational 有理数 demo(代数库 rational.kl) ===")
     println("")
-    println("大部分相同矩阵 B(4x4, 默认 7.0, 例外 2 个):")
-    SparseMatrix spb = SparseMatrix(4, 4, 7.0)
-    spb.set(1, 1, 0.0)
-    spb.set(2, 2, -1.0)
-    spb.print()
+    println("1/2 + 1/3 =")
+    Rational r1 = rat(1, 2)
+    Rational r2 = rat(1, 3)
+    Rational rsum = r1.add(r2)
+    rsum.print()
     println("")
-    println("B 的稠密表示(7 填充, 例外覆盖):")
-    Matrix spbd = spb.to_dense()
-    spbd.print()
+    println("1/2 * 2/3 =")
+    Rational rp = r1.mul(rat(2, 3))
+    rp.print()
     println("")
-    println("B 数乘 2.0 =")
-    SparseMatrix spbs = spb.scalar_mul(2.0)
-    spbs.print()
+    println("1/2 / 1/3 =")
+    Rational rq = r1.div(rat(1, 3))
+    rq.print()
     println("")
-    println("稠密转稀疏(D 的对角线):")
-    Matrix spdm = matrix_identity(3)
-    SparseMatrix spds = matrix_sparse_from_dense(spdm)
-    spds.print()
+    println("2/4 自动约分为 1/2:")
+    Rational rr = rat(2, 4)
+    rr.print()
     println("")
-    println("自动压缩(大部分相同): 4x4 矩阵 13 个 7.0 + 3 个例外")
-    Matrix cpm = Matrix(4, 4)
-    int ci = 0
-    while (ci < 4) {
-        int cj = 0
-        while (cj < 4) {
-            cpm.set(ci, cj, 7.0)
-            cj = cj + 1
-        }
-        ci = ci + 1
-    }
-    cpm.set(1, 1, 0.0)
-    cpm.set(2, 2, -1.0)
-    cpm.set(3, 0, 3.5)
-    SparseMatrix cps = matrix_sparse_compress(cpm)
-    cps.print()
-    println("")
-    println("自动压缩(无多数值): 退化为标准稀疏")
-    Matrix cpm2 = Matrix(2, 2)
-    cpm2.set(0, 0, 1.0)
-    cpm2.set(0, 1, 2.0)
-    cpm2.set(1, 0, 3.0)
-    cpm2.set(1, 1, 0.0)
-    SparseMatrix cps2 = matrix_sparse_compress(cpm2)
-    cps2.print()
+    println("分数矩阵 RM(2x2) * I =")
+    RationalMatrix rma = RationalMatrix(2, 2)
+    rma.set(0, 0, rat(1, 2))
+    rma.set(0, 1, rat(1, 3))
+    rma.set(1, 0, rat(2, 3))
+    rma.set(1, 1, rat(1, 4))
+    RationalMatrix rmb = RationalMatrix(2, 2)
+    rmb.set(0, 0, rat(1, 1))
+    rmb.set(0, 1, rat(0, 1))
+    rmb.set(1, 0, rat(0, 1))
+    rmb.set(1, 1, rat(1, 1))
+    RationalMatrix rmm = rma.mul(rmb)
+    rmm.print()
 }

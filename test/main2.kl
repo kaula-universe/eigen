@@ -1,6 +1,0 @@
-import lib
-
-fn main() {
-    int x = lib.matrix_mul(2, 3)
-    println(x)
-}
